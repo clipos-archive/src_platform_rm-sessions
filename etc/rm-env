@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright © 2007-2018 ANSSI. All Rights Reserved.
+export PATH="/bin:/usr/bin:/usr/local/etc/alt:/usr/local/bin:/usr/local/lib/kde4/libexec"
+export KDE_LANG=fr_FR
+export KDEDIR=/usr/local
+export QTDIR=/usr/local
+export KDEDIRS=/usr/local/etc/kde:/usr/local
+
+export SHELL=/bin/sh
+export BROWSER="/usr/local/etc/alt/web-browser"
+export PAGER="/usr/local/bin/less"
+for editor in vim gvim emacs kate; do
+	if [[ -x "/usr/local/bin/${editor}" ]]; then
+		export EDITOR="/usr/local/bin/${editor}"
+		break
+	fi
+done
+unset editor
+
+export LC_ALL="fr_FR.UTF-8"
+export LANG="fr_FR.UTF-8"
+export G_FILENAME_ENCODING="@locale"
+export XDG_DATA_DIRS="/usr/local/share:/usr/local/etc/kde/share"
+export DISPLAY=:1.0
+[[ -z "${HOME}" ]] && export HOME=/home/user
+export XAUTHORITY=${HOME}/.xauthority
+
+if [[ "${SESSION_TYPE}" == "xfce" ]]; then
+	export SESSION="/usr/local/bin/startxfce4"
+	export CLIP_DEFAULT_TOOLKIT="gtk"
+else
+	export SESSION="/usr/local/bin/startkde"
+	export GTK2_RC_FILES="/usr/local/share/themes/QtCurve/gtk-2.0/gtkrc"
+fi
+
+for f in /etc/env.d/* /usr/local/etc/env.d/* ; do
+	[[ -f "${f}" ]] && source "${f}"
+done
+
+_import_conf() {
+	local conf_file="${1}"
+	local filter_exp="${2}"
+	local tmpvar=""
+
+	shift 2;
+	for var in $*; do
+		tmpvar=`cat "${conf_file}" | grep "^$var=" | tail -n 1`
+		tmpvar="${tmpvar#$var=}"
+		if [[ "${filter_exp}" != "-" ]] ; then
+			tmpvar=`echo "${tmpvar}" | grep -oEe "${filter_exp}" | head -n 1`
+		fi
+		eval "${var}"='${tmpvar}'
+	done
+}
+
+LOCALE_FILE="${HOME}/.clip/locale"
+
+_set_locale() {
+	local loc="$(cat ${LOCALE_FILE})"
+	local valid="no"
+
+	for sys in $(locale -a); do
+		[[ "${sys}" == "${loc}" ]] && valid="yes"
+	done
+
+	if [[ "${valid}" == "yes" ]]; then
+		export LC_ALL="${loc}"
+		export LANG="${loc}"
+		export KDE_LANG="${loc%.*}"
+	else
+		echo "Unsupported user-defined locale: ${loc}" >&2
+	fi
+}
+
+[[ -f "${LOCALE_FILE}" ]] && _set_locale
+
+if [[ -f /etc/admin/proxy ]]; then
+	_import_conf "/etc/admin/proxy" '[-a-zA-Z0-9\./:_,]+' HTTP_PROXY FTP_PROXY HTTPS_PROXY NO_PROXY
+	[[ -n "${HTTP_PROXY}" ]] && export http_proxy="${HTTP_PROXY}"
+	[[ -n "${FTP_PROXY}" ]] && export ftp_proxy="${FTP_PROXY}"
+	[[ -n "${NO_PROXY}" ]] && export no_proxy="${NO_PROXY}"
+	if [[ -n "${HTTPS_PROXY}" ]]; then
+		[[ "${HTTPS_PROXY}" == "-" ]] || export https_proxy="${HTTPS_PROXY}"
+	else
+		[[ -n "${HTTP_PROXY}" ]] && export https_proxy="${HTTP_PROXY}"
+	fi
+fi
+

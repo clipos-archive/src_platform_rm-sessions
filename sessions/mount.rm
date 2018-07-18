@@ -1,0 +1,64 @@
+#!/bin/sh
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright © 2007-2018 ANSSI. All Rights Reserved.
+
+# mount.rm - prepare RM environment for FUSE mounts at session start,
+# cleanup FUSE mounts at session end.
+#
+# Copyright (C) 2011 SGDSN/ANSSI
+# Author: Vincent Strubel <clipos@ssi.gouv.fr>
+#
+# All rights reserved
+
+MTAB_FILE="/tmp/mtab"
+
+info() {
+	logger -p local0.info "mount.rm: ${1}"
+}
+
+warn() {
+	logger -p local0.warning "mount.rm: ${1}"
+}
+
+do_start() {
+	touch "${MTAB_FILE}"
+
+	chown root:mtab "${MTAB_FILE}"
+
+	chmod 664 "${MTAB_FILE}"
+}
+
+do_stop() {
+	cat "${MTAB_FILE}" | while read l; do
+		local mnt="$(echo "${l}" | awk '{print $2}')"
+		local tpe="$(echo "${l}" | awk '{print $3}')"
+		case "${tpe}" in 
+			davfs)
+				umount.davfs "${mnt}"
+				;;
+			*)
+				fusermount -u "${mnt}"
+				;;
+		esac
+				
+		if [[ $? -eq 0 ]]; then
+			info "Leftover FUSE mount unmounted: ${mnt} (${tpe})"
+		else
+			warn "Leftover FUSE mount could not be unmounted: ${mnt} (${tpe})"
+		fi
+	done
+}
+
+case "${1}" in 
+	mount)
+		do_start
+		;;
+	umount)
+		do_stop
+		;;
+	*)
+		warn "Invalid mount.rm command: ${1}"
+		exit 1
+		;;
+esac
+
